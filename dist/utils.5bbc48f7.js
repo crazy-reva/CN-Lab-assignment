@@ -6525,36 +6525,70 @@ function captureVideo(videoInput) {
     recorder = (0, _recordrtc.default)(stream, {
       type: "video",
       mimeType: "video/webm",
+      // MediaStreamRecorder, StereoAudioRecorder, WebAssemblyRecorder
+      // CanvasRecorder, GifRecorder, WhammyRecorder
+      //recorderType: MediaStreamRecorder,
+
       // get intervals based blobs
       // value in milliseconds
       timeSlice: 3000,
+      // requires timeSlice above
+      // returns blob via callback function
       ondataavailable: function ondataavailable(blob) {
         // callback function that receives a recorded segment as a Blob object
         // encode the blob using Base64 or some other encoding format
+        //   var blob = recorder.getBlob();
         console.log(blob);
 
-        //   downloadBlob(blob);
+        //   const link = document.createElement("a");
+        //   link.href = URL.createObjectURL(blob);
+        //   // debugger;
+        //   console.log("link:", link.href);
+        //   link.download = "a.mp4";
+        //   link.click();
 
-        var reader = new FileReader();
-        reader.onloadend = function () {
-          // callback function that receives the encoded data as a string
-          var encodedData = reader.result;
-          // send the encoded data to the server or save it locally
-          // ...
-        };
+        // callback function that receives the encoded data as a string
+        var encodedData = reader.result;
+        // console.log("encoded Data:", encodedData);
+        // send the encoded data to the server or save it locally
+        // ...
+        //   var reader = new FileReader();
+        //   reader.onloadend = function () {
+        //     var blob = recorder.getBlob();
+        //     console.log(blob);
 
-        reader.readAsDataURL(blob);
+        //     const link = document.createElement("a");
+        //     link.href = URL.createObjectURL(blob);
+        //     // debugger;
+        //     console.log("link:", link.href);
+        //     link.download = "a.mp4";
+        //     link.click();
+
+        //     // callback function that receives the encoded data as a string
+        //     var encodedData = reader.result;
+        //     // console.log("encoded Data:", encodedData);
+        //     // send the encoded data to the server or save it locally
+        //     // ...
+        //   };
+        //   //reader.readAsDataURL(blob);
       },
+
       // auto stop recording if camera stops
       checkForInactiveTracks: false,
       // requires timeSlice above
       onTimeStamp: function onTimeStamp(timestamp) {},
       // only for video track
       videoBitsPerSecond: 500000,
+      // used by CanvasRecorder and WhammyRecorder
       // it is kind of a "frameRate"
       frameInterval: 30,
+      // if you are recording multiple streams into single file
+      // this helps you see what is being recorded
       previewStream: function previewStream(stream) {},
+      // used by CanvasRecorder and WhammyRecorder
+      // you can pass {width:640, height: 480} as well
       video: HTMLVideoElement,
+      // used by CanvasRecorder and WhammyRecorder
       canvas: {
         width: 1280,
         height: 720
@@ -6581,57 +6615,65 @@ function captureVideo(videoInput) {
     });
 
     recorder.startRecording();
+
+    //   //get blob in every 3 seconds.
+    //   setInterval(function () {
+    //     // get the recorded blob
+    //     var blob = recorder.getBlob();
+    //     console.log(blob);
+
+    //     const link = document.createElement("a");
+    //     link.href = URL.createObjectURL(blob);
+    //     // debugger;
+    //     console.log("link:", link.href);
+    //     link.download = "a.mp4";
+    //     link.click();
+    //   }, 3000);
   });
 
-  // stop recording after 3 seconds
-  setInterval(function () {
-    recorder.stopRecording(function () {
-      // get the recorded blob
-      var timestamp = new Date().toISOString(); // get current timestamp in ISO format
-      var fileName = "myfile_".concat(timestamp, ".mp4");
-      var blob = recorder.getBlob();
-      console.log(blob);
-      var link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      // debugger;
-      console.log("link:", link.href);
-      link.download = fileName;
-      link.click();
-      recorder.startRecording();
-    });
-  }, 3000);
+  //   // stop recording after 3 seconds
+  //   setTimeout(function () {
+  //     recorder.stopRecording(function () {
+  //       // get the recorded blob
+  //       var blob = recorder.getBlob();
+  //       console.log(blob);
+
+  //       const link = document.createElement("a");
+  //       link.href = URL.createObjectURL(blob);
+  //       // debugger;
+  //       console.log("link:", link.href);
+  //       link.download = "a.mp4";
+  //       link.click();
+  //       // do something with the blob, e.g. send it to the server or save it locally
+  //       // ...
+  //     });
+  //   }, 3000);
+  // });
 }
-// function downloadBlob(blob) {
-//   const timestamp = new Date().toISOString(); // get current timestamp in ISO format
-//   const fileName = `myfile_${timestamp}.mp4`;
-//   const link = document.createElement("a");
-//   link.href = URL.createObjectURL(blob);
-//   // debugger;
-//   console.log("link:", link.href);
-//   link.download = fileName;
-//   link.click();
-// }
 
 function init() {
+  //   const stream = await captureVideo(videoInput);
   var videoInput = document.getElementById("inputVideo");
   captureVideo(videoInput);
 }
-var startButton = document.getElementById("start");
-startButton.addEventListener("click", function () {
-  console.log("Start recording..........");
-  init(); //start Recording
+function stopExecution() {
+  console.log("Stop recording..........");
+  if (recorder) recorder.stopRecording();
+}
+var stopButton = document.getElementById("stop");
+stopButton.addEventListener("click", function () {
+  stopExecution();
 });
+init();
+},{"recordrtc":"node_modules/recordrtc/RecordRTC.js"}],"src/js/utils.js":[function(require,module,exports) {
+"use strict";
 
-// function stopExecution() {
-//   console.log("Stop recording..........");
-//   if (recorder) recorder.stopRecording();
-// }
-
-// const stopButton = document.getElementById("stop");
-// stopButton.addEventListener("click", () => {
-//   stopExecution();
-// });
-},{"recordrtc":"node_modules/recordrtc/RecordRTC.js"}],"node_modules/parcel-bundler/src/builtins/hmr-runtime.js":[function(require,module,exports) {
+var _app = require("./app");
+var stopButton = document.getElementById("stop");
+stopButton.addEventListener("click", function () {
+  (0, _app.stopExecution)();
+});
+},{"./app":"src/js/app.js"}],"node_modules/parcel-bundler/src/builtins/hmr-runtime.js":[function(require,module,exports) {
 var global = arguments[3];
 var OVERLAY_ID = '__parcel__error__overlay__';
 var OldModule = module.bundle.Module;
@@ -6656,7 +6698,7 @@ var parent = module.bundle.parent;
 if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== 'undefined') {
   var hostname = "" || location.hostname;
   var protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-  var ws = new WebSocket(protocol + '://' + hostname + ':' + "61729" + '/');
+  var ws = new WebSocket(protocol + '://' + hostname + ':' + "60434" + '/');
   ws.onmessage = function (event) {
     checkedAssets = {};
     assetsToAccept = [];
@@ -6800,5 +6842,5 @@ function hmrAcceptRun(bundle, id) {
     return true;
   }
 }
-},{}]},{},["node_modules/parcel-bundler/src/builtins/hmr-runtime.js","src/js/app.js"], null)
-//# sourceMappingURL=/app.77c12427.js.map
+},{}]},{},["node_modules/parcel-bundler/src/builtins/hmr-runtime.js","src/js/utils.js"], null)
+//# sourceMappingURL=/utils.5bbc48f7.js.map

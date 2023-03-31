@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "jsdom": "^21.1.1",
-    "mp4box": "^0.5.2"
+    "mp4box": "^0.5.2",
+    "recordrtc": "^5.6.2"
   }
 }

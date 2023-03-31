@@ -8608,11 +8608,10 @@ var pipeline = /*#__PURE__*/function () {
           var mp4boxfile = this.mp4Box.createFile({
             meta: true
           });
-          var fileStart = 0;
           var outputFileName = "";
           var track = null;
-          var frameDuration = 5000000; // 5Mbps
-
+          var frameDuration = 5000000 / 30; // 5Mbps
+          var count = 1;
           mp4boxfile.onReady = function () {
             console.log("Received File Information");
             console.log("moov object:", mp4boxfile.moov);
@@ -8626,14 +8625,14 @@ var pipeline = /*#__PURE__*/function () {
             console.log("Track Count:", trackCount);
             var info = mp4boxfile.getInfo();
             mp4boxfile.setSegmentOptions(info.tracks[0].id);
-            mp4boxfile.setSegmentOptions({
-              format: "mp4"
-            });
-            mp4boxfile.setSegmentOptions({
-              segmentDuration: 3
-            });
-            mp4boxfile.start();
+
+            // mp4boxfile.setSegmentOptions({ format: "mp4" });
+
+            // mp4boxfile.setSegmentOptions({ segmentDuration: 3 });
+
+            // mp4boxfile.start();
           };
+
           mp4boxfile.onSegment = function (id, user, buffer, sampleNum, isLast) {
             // Send the video segment to the server
             console.log("Inside onSegment method");
@@ -8647,15 +8646,16 @@ var pipeline = /*#__PURE__*/function () {
             console.log("aa", formData.getAll("segment"));
             outputFileName = formData.get("segment").name;
             var file = formData.getAll("segment")[0];
-            self.postMessage({
-              data: buffer,
-              type: "data"
-            }, [buffer]);
+
+            //self.postMessage({ data: buffer, type: "data" }, [buffer]);
 
             // If this is the last segment, reset the segment number
             if (isLast) {
               segmentNumber = 0;
             }
+          };
+          mp4boxfile.onSamples = function (id, user, samples) {
+            console.log("Received " + samples.length + " samples on track " + id + " for object " + user);
           };
           mp4boxfile.onMoovStart = function () {
             console.log("Starting to receive File Information");
@@ -8663,44 +8663,87 @@ var pipeline = /*#__PURE__*/function () {
           mp4boxfile.onError = function (error) {
             console.error("Error parsing MP4 file:", error);
           };
+          var track_id = 0;
+          var fileStart = 0;
+
+          //if (track === null) {
+          //   track_id = mp4boxfile.addTrack({
+          //     width: 1280,
+          //     height: 720,
+          //     timescale: 1000 * 3000,
+          //     nb_samples: 90,
+          //     duration: frameDuration,
+          //     framerate: 30,
+          //     bitrate: 5000000, // 5Mbps
+          //     codec: "avc1.42002A",
+          //   });
+          // }
+
           this.encoder = encoder = new VideoEncoder({
             output: function output(chunk, cfg) {
               console.log(chunk);
+              console.log("chunk byte length:", chunk.byteLength);
+              console.log("chunk duration", chunk.duration);
+              console.log("Frame Counter: ", _this2.frameCounter);
+              console.log("key interval: ", config.keyInterval);
+              //console.log("count:", count);
+              // const uint8Array = new Uint8Array(chunk.byteLength);
+              // console.log("buffer: ", uint8Array);
+              // chunk.copyTo(uint8Array);
+              // const buffer = uint8Array.buffer;
+
               if (track === null) {
-                track = mp4boxfile.addTrack({
+                track_id = mp4boxfile.addTrack({
                   width: 1280,
-                  height: 720
+                  height: 720,
+                  timescale: 1000 * 3000,
+                  // nb_samples: 90,
+                  duration: frameDuration,
+                  framerate: 30,
+                  bitrate: 5000000,
+                  // 5Mbps
+                  codec: "avc1.42002A"
                 });
               }
-              var buffer = new ArrayBuffer(chunk.byteLength);
-              chunk.copyTo(buffer);
-              mp4boxfile.addSample(track, buffer, {
-                duration: frameDuration
-              });
-              var count = 0;
-              if (chunk.type == "key") {
-                count++;
+              mp4boxfile.addSample(track_id, chunk.byteLength);
+              console.log("Segmentation: ", mp4boxfile.initializeSegmentation());
+              var info = mp4boxfile.getInfo();
+              console.log("info of tracks: ", info);
+
+              //mp4boxfile.setSegmentOptions(info.tracks[0].id);
+
+              var uint8Array = new Uint8Array(chunk.byteLength);
+              console.log(uint8Array);
+              chunk.copyTo(uint8Array);
+              var buffer = uint8Array.buffer;
+              //mp4boxfile.addSample(track_id, chunk.byteLength);
+
+              //console.log("duration:", duration);
+
+              buffer.fileStart = fileStart; // Set the fileStart property to 0
+              fileStart += buffer.byteLength;
+              console.log("fileStart:", fileStart);
+              console.log("mp4boxFileObject: ", mp4boxfile);
+              console.log("buffer data: ", buffer);
+              mp4boxfile.appendBuffer(buffer);
+              mp4boxfile.onReady();
+              mp4boxfile.onSegment(track_id, null, buffer);
+
+              //self.postMessage({ data: buffer, type: "data" }, [buffer]);
+
+              if (_this2.frameCounter % config.keyInterval == 0) {
                 console.log("count:", count);
-                var uint8Array = new Uint8Array(chunk.byteLength);
-                console.log("buffer: ", uint8Array);
-                chunk.copyTo(uint8Array);
-                var _buffer = uint8Array.buffer;
-                _buffer.fileStart = fileStart; // Set the fileStart property to 0
-                fileStart += _buffer.byteLength;
-                console.log("fileStart:", fileStart);
-                console.log("mp4boxFileObject: ", mp4boxfile);
-                console.log(_buffer);
-                mp4boxfile.appendBuffer(_buffer);
                 console.log("mp4boxFile after appending Buffer:", mp4boxfile);
-                console.log("Inside segmentation after 90 frames");
-                // Flush the remaining frames to create the last segment
-                //debugger;
-                mp4boxfile.flush();
-                console.log("Get info: ", mp4boxfile.getInfo());
-                mp4boxfile.onReady();
-                mp4boxfile.onSegment(id, null, _buffer, mp4boxfile.sampleNum, false);
-                id++;
+                // mp4boxfile.onReady();
+                // mp4boxfile.onSegment(track_id, null, buffer);
+                self.postMessage({
+                  data: buffer,
+                  type: "data"
+                }, [buffer]);
+                //mp4boxfile.flush();
+                count++;
               }
+              track_id++;
               if (cfg.decoderConfig) {
                 var decoderConfig = JSON.stringify(cfg.decoderConfig);
                 self.postMessage({
@@ -8742,6 +8785,7 @@ var pipeline = /*#__PURE__*/function () {
             }
           });
           VideoEncoder.isConfigSupported(config).then(function (encoderSupport) {
+            // debugger;
             if (encoderSupport.supported) {
               _this2.encoder.configure(encoderSupport.config);
               self.postMessage({
@@ -8761,6 +8805,8 @@ var pipeline = /*#__PURE__*/function () {
           });
         },
         transform: function transform(frame, controller) {
+          //debugger;
+          console.log("frame:", frame);
           if (this.pending_outputs <= 30) {
             this.pending_outputs++;
             console.log("Frame counter:", this.frameCounter);
@@ -8880,7 +8926,7 @@ var parent = module.bundle.parent;
 if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== 'undefined') {
   var hostname = "" || location.hostname;
   var protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-  var ws = new WebSocket(protocol + '://' + hostname + ':' + "58085" + '/');
+  var ws = new WebSocket(protocol + '://' + hostname + ':' + "65462" + '/');
   ws.onmessage = function (event) {
     checkedAssets = {};
     assetsToAccept = [];

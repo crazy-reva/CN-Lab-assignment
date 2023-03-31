@@ -1,163 +1,134 @@
-// import MP4Box from "mp4box";
-const streamWorker = new Worker("worker.js");
+import RecordRTC from "recordrtc";
+let recorder = null;
+function captureVideo(videoInput) {
+  navigator.mediaDevices
+    .getUserMedia({
+      video: true,
+      audio: false,
+    })
+    .then(function (stream) {
+      videoInput.srcObject = stream;
+      videoInput.play();
+      recorder = RecordRTC(stream, {
+        type: "video",
 
-async function captureVideo(videoInput) {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: true,
-    audio: false,
-  });
+        mimeType: "video/webm",
 
-  videoInput.srcObject = stream;
-  videoInput.play();
+        // get intervals based blobs
+        // value in milliseconds
+        timeSlice: 3000,
 
-  return stream;
-}
+        ondataavailable: function (blob) {
+          // callback function that receives a recorded segment as a Blob object
+          // encode the blob using Base64 or some other encoding format
+          console.log(blob);
 
-const startCapture = async (track, settings) => {
-  // Start capturing frames at 30 fps
+          //   downloadBlob(blob);
 
-  let ts = track.getSettings();
-  const processor = new MediaStreamTrackProcessor(track);
-  console.log(processor);
-  const inputStream = processor.readable;
+          var reader = new FileReader();
+          reader.onloadend = function () {
+            // callback function that receives the encoded data as a string
+            var encodedData = reader.result;
+            // send the encoded data to the server or save it locally
+            // ...
+          };
+          reader.readAsDataURL(blob);
+        },
 
-  console.log(inputStream);
+        // auto stop recording if camera stops
+        checkForInactiveTracks: false,
 
-  // Create a MediaStreamTrackGenerator, which exposes a track from a
-  // WritableStream of VideoFrames, using non-standard Chrome API.
-  const generator = new MediaStreamTrackGenerator({ kind: "video" });
-  const outputStream = generator.writable;
-  document.getElementById("outputVideo").srcObject = new MediaStream([
-    generator,
-  ]);
+        // requires timeSlice above
+        onTimeStamp: function (timestamp) {},
 
-  let ssrcArr = new Uint8Array(1);
-  window.crypto.getRandomValues(ssrcArr);
-  const ssrc = ssrcArr[0];
+        // only for video track
+        videoBitsPerSecond: 500000,
 
-  //   const captureStream = new MediaStream();
-  //   const videoTrack = captureStream.addTrack(track.clone());
-  //   const encoder = new VideoEncoder({
-  //     output: (chunk) => {
-  //       console.log(chunk);
-  //       // Send the encoded chunk to the server (or do something else with it)
-  //     },
-  //     error: (error) => {
-  //       // Handle any encoding errors
-  //     },
-  //   });
-  const options = {
-    codec: "avc1.42002A", //H264
-    avc: { format: "annexb" },
-    pt: 1,
-    framerate: 30,
-    bitrate: 5000000, // 5Mbps
-    height: settings.height,
-    width: settings.width,
-    ssrc: ssrc,
-    bitrateMode: "constant",
-    keyInterval: 90, //Set the keyframe interval to 90 frames
-  };
-  //   config;
-  //   config.pt = 1;
-  // await encoder.configure(options);
-  //   encoder.encode(videoTrack, { startTime: performance.now() });
-  streamWorker.postMessage(
-    {
-      type: "stream",
-      config: options,
-      streams: { input: inputStream, output: outputStream },
-    },
-    [inputStream, outputStream]
-  );
-  // window.docume?nt.get
-  streamWorker.addEventListener("message", (info) => {
-    console.log("aaaa", info);
-    const i = info.data;
-    console.log(info.type);
-    if (i.type === "data") {
-      console.log("dataaa");
-      const blob = new Blob([i.data], { type: "video/mp4" });
-      const formData = new FormData();
-      formData.append("segment", blob, "1_segment-0.mp4");
-      console.log("Segment created ");
-      console.log("Blob size", blob.size);
-      //sendFormDataToServer(formData);
-      console.log("Form Data:", formData);
+        // it is kind of a "frameRate"
+        frameInterval: 30,
 
-      console.log("bb", formData.getAll("segment"));
-      const file = formData.getAll("segment");
-      const outputFileName = formData.get("segment").name;
-      // console.log(file);
-      // display(file[0], document.getElementById("v"));
+        previewStream: function (stream) {},
+
+        video: HTMLVideoElement,
+
+        canvas: {
+          width: 1280,
+          height: 720,
+        },
+
+        // used by StereoAudioRecorder
+        // the range 22050 to 96000.
+        sampleRate: 96000,
+
+        // used by StereoAudioRecorder
+        // the range 22050 to 96000.
+        // let us force 16khz recording:
+        desiredSampRate: 16000,
+
+        // used by StereoAudioRecorder
+        // Legal values are (256, 512, 1024, 2048, 4096, 8192, 16384).
+        bufferSize: 16384,
+
+        // // used by WebAssemblyRecorder
+        // frameRate: 30,
+
+        // // used by WebAssemblyRecorder
+        // bitrate: 128000,
+
+        // // used by MultiStreamRecorder - to access HTMLCanvasElement
+        // elementClass: "multi-streams-mixer",
+      });
+
+      recorder.startRecording();
+    });
+
+  // stop recording after 3 seconds
+  setInterval(function () {
+    recorder.stopRecording(function () {
+      // get the recorded blob
+      const timestamp = new Date().toISOString(); // get current timestamp in ISO format
+      const fileName = `myfile_${timestamp}.mp4`;
+      var blob = recorder.getBlob();
+      console.log(blob);
+
       const link = document.createElement("a");
-      console.log("fillll", file);
-      link.href = window.URL.createObjectURL(file[0]);
-      link.target = "_blank";
+      link.href = URL.createObjectURL(blob);
       // debugger;
       console.log("link:", link.href);
-      link.download = outputFileName;
+      link.download = fileName;
       link.click();
-    }
-  });
+      recorder.startRecording();
+    });
+  }, 3000);
+}
+// function downloadBlob(blob) {
+//   const timestamp = new Date().toISOString(); // get current timestamp in ISO format
+//   const fileName = `myfile_${timestamp}.mp4`;
+//   const link = document.createElement("a");
+//   link.href = URL.createObjectURL(blob);
+//   // debugger;
+//   console.log("link:", link.href);
+//   link.download = fileName;
+//   link.click();
+// }
 
-  //   return options;
-};
-
-function display(videoFile, videoEl) {
-  // Preconditions:
-  if (!(videoFile instanceof Blob))
-    throw new Error("`videoFile` must be a Blob or File object."); // The `File` prototype extends the `Blob` prototype, so `instanceof Blob` works for both.
-  if (!(videoEl instanceof HTMLVideoElement))
-    throw new Error("`videoEl` must be a <video> element.");
-
-  //
-
-  const newObjectUrl = URL.createObjectURL(videoFile);
-
-  // URLs created by `URL.createObjectURL` always use the `blob:` URI scheme: https://w3c.github.io/FileAPI/#dfn-createObjectURL
-  const oldObjectUrl = videoEl.currentSrc;
-  if (oldObjectUrl && oldObjectUrl.startsWith("blob:")) {
-    // It is very important to revoke the previous ObjectURL to prevent memory leaks. Un-set the `src` first.
-    // See https://developer.mozilla.org/en-US/docs/Web/API/URL/createObjectURL
-
-    videoEl.src = ""; // <-- Un-set the src property *before* revoking the object URL.
-    URL.revokeObjectURL(oldObjectUrl);
-  }
-
-  // Then set the new URL:
-  videoEl.src = newObjectUrl;
-
-  // And load it:
-  videoEl.load(); // https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/load
+function init() {
+  const videoInput = document.getElementById("inputVideo");
+  captureVideo(videoInput);
 }
 
-const init = async () => {
-  const settings = {
-    width: 1280,
-    height: 720,
-  };
+const startButton = document.getElementById("start");
+startButton.addEventListener("click", () => {
+  console.log("Start recording..........");
+  init(); //start Recording
+});
 
-  const videoInput = document.getElementById("inputVideo");
-  const stream = await captureVideo(videoInput);
-  const track = stream.getVideoTracks()[0];
-  //  const imageCapture=new ImageCapture(track);
-  //  imageCapture.
-  const capabilties = track.getCapabilities();
+// function stopExecution() {
+//   console.log("Stop recording..........");
+//   if (recorder) recorder.stopRecording();
+// }
 
-  if (capabilties.width) {
-    settings.width = Math.min(capabilties.width.max, settings.width);
-  }
-  if (capabilties.height) {
-    settings.height = Math.min(capabilties.height.max, settings.height);
-  }
-
-  await track.applyConstraints({
-    width: settings.width,
-    height: settings.height,
-  });
-
-  startCapture(track, settings);
-};
-
-init();
+// const stopButton = document.getElementById("stop");
+// stopButton.addEventListener("click", () => {
+//   stopExecution();
+// });

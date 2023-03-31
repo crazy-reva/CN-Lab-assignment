@@ -236,17 +236,16 @@ class pipeline {
         var segmentDuration = 3; //in seconds
 
         let id = 0;
-
         console.log("Inside Encode Video Stream");
 
         // this.mp4Box = new MP4Box();
         this.mp4Box = MP4Box;
         var mp4boxfile = this.mp4Box.createFile({ meta: true });
 
-        let fileStart = 0;
         let outputFileName = "";
         let track = null;
-        const frameDuration = 5_000_000; // 5Mbps
+        const frameDuration = 5_000_000 / 30; // 5Mbps
+        let count = 1;
 
         mp4boxfile.onReady = function () {
           console.log("Received File Information");
@@ -265,10 +264,11 @@ class pipeline {
 
           mp4boxfile.setSegmentOptions(info.tracks[0].id);
 
-          mp4boxfile.setSegmentOptions({ format: "mp4" });
+          // mp4boxfile.setSegmentOptions({ format: "mp4" });
 
-          mp4boxfile.setSegmentOptions({ segmentDuration: 3 });
-          mp4boxfile.start();
+          // mp4boxfile.setSegmentOptions({ segmentDuration: 3 });
+
+          // mp4boxfile.start();
         };
 
         mp4boxfile.onSegment = (id, user, buffer, sampleNum, isLast) => {
@@ -284,12 +284,23 @@ class pipeline {
           outputFileName = formData.get("segment").name;
           const file = formData.getAll("segment")[0];
 
-          self.postMessage({ data: buffer, type: "data" }, [buffer]);
+          //self.postMessage({ data: buffer, type: "data" }, [buffer]);
 
           // If this is the last segment, reset the segment number
           if (isLast) {
             segmentNumber = 0;
           }
+        };
+
+        mp4boxfile.onSamples = function (id, user, samples) {
+          console.log(
+            "Received " +
+              samples.length +
+              " samples on track " +
+              id +
+              " for object " +
+              user
+          );
         };
 
         mp4boxfile.onMoovStart = function () {
@@ -300,57 +311,89 @@ class pipeline {
           console.error("Error parsing MP4 file:", error);
         };
 
+        let track_id = 0;
+        let fileStart = 0;
+
+        //if (track === null) {
+        //   track_id = mp4boxfile.addTrack({
+        //     width: 1280,
+        //     height: 720,
+        //     timescale: 1000 * 3000,
+        //     nb_samples: 90,
+        //     duration: frameDuration,
+        //     framerate: 30,
+        //     bitrate: 5000000, // 5Mbps
+        //     codec: "avc1.42002A",
+        //   });
+        // }
+
         this.encoder = encoder = new VideoEncoder({
           output: (chunk, cfg) => {
             console.log(chunk);
 
+            console.log("chunk byte length:", chunk.byteLength);
+            console.log("chunk duration", chunk.duration);
+
+            console.log("Frame Counter: ", this.frameCounter);
+            console.log("key interval: ", config.keyInterval);
+            //console.log("count:", count);
+            // const uint8Array = new Uint8Array(chunk.byteLength);
+            // console.log("buffer: ", uint8Array);
+            // chunk.copyTo(uint8Array);
+            // const buffer = uint8Array.buffer;
+
             if (track === null) {
-              track = mp4boxfile.addTrack({
+              track_id = mp4boxfile.addTrack({
                 width: 1280,
                 height: 720,
+                timescale: 1000 * 3000,
+                // nb_samples: 90,
+                duration: frameDuration,
+                framerate: 30,
+                bitrate: 5000000, // 5Mbps
+                codec: "avc1.42002A",
               });
             }
 
-            const buffer = new ArrayBuffer(chunk.byteLength);
-            chunk.copyTo(buffer);
-            mp4boxfile.addSample(track, buffer, {
-              duration: frameDuration,
-            });
+            mp4boxfile.addSample(track_id, chunk.byteLength);
+            console.log("Segmentation: ", mp4boxfile.initializeSegmentation());
 
-            let count = 0;
-            if (chunk.type == "key") {
-              count++;
+            var info = mp4boxfile.getInfo();
+            console.log("info of tracks: ", info);
+
+            //mp4boxfile.setSegmentOptions(info.tracks[0].id);
+
+            const uint8Array = new Uint8Array(chunk.byteLength);
+            console.log(uint8Array);
+            chunk.copyTo(uint8Array);
+            let buffer = uint8Array.buffer;
+            //mp4boxfile.addSample(track_id, chunk.byteLength);
+
+            //console.log("duration:", duration);
+
+            buffer.fileStart = fileStart; // Set the fileStart property to 0
+            fileStart += buffer.byteLength;
+            console.log("fileStart:", fileStart);
+            console.log("mp4boxFileObject: ", mp4boxfile);
+            console.log("buffer data: ", buffer);
+            mp4boxfile.appendBuffer(buffer);
+
+            mp4boxfile.onReady();
+            mp4boxfile.onSegment(track_id, null, buffer);
+
+            //self.postMessage({ data: buffer, type: "data" }, [buffer]);
+
+            if (this.frameCounter % config.keyInterval == 0) {
               console.log("count:", count);
-              const uint8Array = new Uint8Array(chunk.byteLength);
-              console.log("buffer: ", uint8Array);
-              chunk.copyTo(uint8Array);
-              const buffer = uint8Array.buffer;
-              buffer.fileStart = fileStart; // Set the fileStart property to 0
-              fileStart += buffer.byteLength;
-              console.log("fileStart:", fileStart);
-              console.log("mp4boxFileObject: ", mp4boxfile);
-              console.log(buffer);
-              mp4boxfile.appendBuffer(buffer);
-
               console.log("mp4boxFile after appending Buffer:", mp4boxfile);
-
-              console.log("Inside segmentation after 90 frames");
-              // Flush the remaining frames to create the last segment
-              //debugger;
-              mp4boxfile.flush();
-
-              console.log("Get info: ", mp4boxfile.getInfo());
-
-              mp4boxfile.onReady();
-              mp4boxfile.onSegment(
-                id,
-                null,
-                buffer,
-                mp4boxfile.sampleNum,
-                false
-              );
-              id++;
+              // mp4boxfile.onReady();
+              // mp4boxfile.onSegment(track_id, null, buffer);
+              self.postMessage({ data: buffer, type: "data" }, [buffer]);
+              //mp4boxfile.flush();
+              count++;
             }
+
+            track_id++;
 
             if (cfg.decoderConfig) {
               const decoderConfig = JSON.stringify(cfg.decoderConfig);
@@ -392,6 +435,7 @@ class pipeline {
         });
         VideoEncoder.isConfigSupported(config)
           .then((encoderSupport) => {
+            // debugger;
             if (encoderSupport.supported) {
               this.encoder.configure(encoderSupport.config);
               self.postMessage({
@@ -416,6 +460,8 @@ class pipeline {
           });
       },
       transform(frame, controller) {
+        //debugger;
+        console.log("frame:", frame);
         if (this.pending_outputs <= 30) {
           this.pending_outputs++;
           console.log("Frame counter:", this.frameCounter);
